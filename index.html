@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Anonypoll</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #121212;
+      color: white;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+    }
+
+    h1 {
+      text-align: center;
+    }
+
+    .create {
+      background: #1e1e1e;
+      border-radius: 12px;
+      padding: 16px;
+      width: 100%;
+      max-width: 400px;
+    }
+
+    input, textarea {
+      width: 100%;
+      padding: 10px;
+      margin-top: 8px;
+      border: none;
+      border-radius: 6px;
+    }
+
+    button {
+      padding: 10px;
+      margin-top: 10px;
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      width: 100%;
+    }
+
+    .poll-preview {
+      background: #1e1e1e;
+      border-radius: 12px;
+      padding: 16px;
+      margin-top: 20px;
+      width: 100%;
+      max-width: 400px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .poll-preview:hover {
+      background: #2a2a2a;
+    }
+
+    .result {
+      font-size: 13px;
+      color: #aaa;
+      margin-top: 6px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Anonypoll</h1>
+
+  <div class="create">
+    <h2>Create Poll</h2>
+    <input id="poll-question" placeholder="Your question..." />
+    <textarea id="poll-options" placeholder="Options (one per line)"></textarea>
+    <button onclick="createPoll()">Create</button>
+  </div>
+
+  <div id="polls"></div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getFirestore, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyA0b-2cAqQzc_cAx3vIYikB3ni_nR40GPs",
+      authDomain: "anonypoll.firebaseapp.com",
+      databaseURL: "https://anonypoll-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId: "anonypoll",
+      storageBucket: "anonypoll.firebasestorage.app",
+      messagingSenderId: "346324014501",
+      appId: "1:346324014501:web:2a465083f14e4a4f97444c"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    async function createPoll() {
+      const question = document.getElementById("poll-question").value.trim();
+      const optionsText = document.getElementById("poll-options").value.trim();
+      if (!question || !optionsText) return;
+
+      const options = optionsText.split('\n').map(opt => opt.trim()).filter(Boolean);
+      const counts = options.map(() => 0);
+
+      await addDoc(collection(db, "polls"), {
+        question,
+        options,
+        votes: counts,
+        created: Date.now()
+      });
+
+      location.reload();
+    }
+
+    async function loadPolls() {
+      const pollsContainer = document.getElementById("polls");
+      const querySnapshot = await getDocs(collection(db, "polls"));
+      pollsContainer.innerHTML = "";
+
+      querySnapshot.forEach(docSnap => {
+        const poll = docSnap.data();
+        const id = docSnap.id;
+        const total = poll.votes.reduce((a, b) => a + b, 0) || 1;
+
+        const div = document.createElement("div");
+        div.className = "poll-preview";
+        div.onclick = () => window.location.href = `poll.html?poll=${id}`;
+
+        const results = poll.options.map((opt, i) => {
+          const pct = Math.round((poll.votes[i] / total) * 100);
+          return `<div class="result">${opt} — ${poll.votes[i]} votes (${pct}%)</div>`;
+        }).join("");
+
+        div.innerHTML = `<strong>${poll.question}</strong>${results}`;
+        pollsContainer.appendChild(div);
+      });
+    }
+
+    loadPolls();
+  </script>
+</body>
+</html>
