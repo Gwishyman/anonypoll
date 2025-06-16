@@ -84,7 +84,76 @@
   <div id="polls"></div>
 
   <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-    import { getFirestore, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import {
+    getFirestore, collection, addDoc, getDocs
+  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-    const firebaseConfig = {
+  const firebaseConfig = {
+    apiKey: "AIzaSyA0b-2cAqQzc_cAx3vIYikB3ni_nR40GPs",
+    authDomain: "anonypoll.firebaseapp.com",
+    databaseURL: "https://anonypoll-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "anonypoll",
+    storageBucket: "anonypoll.firebasestorage.app",
+    messagingSenderId: "346324014501",
+    appId: "1:346324014501:web:2a465083f14e4a4f97444c"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
+  const notif = document.getElementById("notif");
+  function showNotif(msg, time = 3000) {
+    notif.innerText = msg;
+    notif.style.display = "block";
+    setTimeout(() => notif.style.display = "none", time);
+  }
+
+  document.getElementById("create-btn").addEventListener("click", () => {
+    showNotif("Create button clicked");
+    createPoll();
+  });
+
+  async function createPoll() {
+    const q = document.getElementById("poll-question").value.trim();
+    const rawOpts = document.getElementById("poll-options").value.trim();
+    if (!q || !rawOpts) return showNotif("Missing question or options");
+
+    const opts = rawOpts.split("\n").map(o => o.trim()).filter(o => o);
+    if (opts.length < 2) return showNotif("At least two options");
+
+    const newPoll = {
+      question: q,
+      options: opts,
+      votes: opts.map(() => 0),
+      created: Date.now()
+    };
+
+    try {
+      const docRef = await addDoc(collection(db, "polls"), newPoll);
+      showNotif("Poll created!", 1500);
+      setTimeout(() => {
+        location.href = `poll.html?poll=${docRef.id}`;
+      }, 800);
+    } catch (e) {
+      showNotif("Failed to create poll.");
+    }
+  }
+
+  const pollsEl = document.getElementById("polls");
+  const pollsSnap = await getDocs(collection(db, "polls"));
+  pollsSnap.forEach(doc => {
+    const d = doc.data();
+    const wrap = document.createElement("div");
+    wrap.className = "poll-preview";
+    wrap.innerHTML = `<b>${d.question}</b><div class="result">${formatVotes(d.votes, d.options)}</div>`;
+    wrap.onclick = () => location.href = `poll.html?poll=${doc.id}`;
+    pollsEl.appendChild(wrap);
+  });
+
+  function formatVotes(votes, options) {
+    const total = votes.reduce((a, b) => a + b, 0);
+    if (total === 0) return options.map(o => `${o}: 0%`).join("<br>");
+    return votes.map((v, i) => `${options[i]}: ${Math.round((v / total) * 100)}%`).join("<br>");
+  }
+</script>
