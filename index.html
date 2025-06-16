@@ -1,172 +1,109 @@
-<!DOCTYPE html>
-<html lang="en">
+<!DOCTYPE html><html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Anonypoll</title>
   <style>
-    body {
-      font-family: sans-serif;
-      background: #121212;
-      color: white;
-      margin: 0;
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-
-    h1 {
-      text-align: center;
-    }
-
-    .create {
-      background: #1e1e1e;
-      border-radius: 12px;
-      padding: 16px;
-      width: 100%;
-      max-width: 400px;
-    }
-
-    input, textarea {
-      width: 100%;
-      padding: 10px;
-      margin-top: 8px;
-      border: none;
-      border-radius: 6px;
-      background: #2a2a2a;
-      color: white;
-    }
-
-    button {
-      padding: 10px;
-      margin-top: 10px;
-      background: #007bff;
-      color: white;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      width: 100%;
-    }
-
-    .poll-preview {
-      background: #1e1e1e;
-      border-radius: 12px;
-      padding: 16px;
-      margin-top: 20px;
-      width: 100%;
-      max-width: 400px;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-
-    .poll-preview:hover {
-      background: #2a2a2a;
-    }
-
-    .result {
-      font-size: 13px;
-      color: #aaa;
-      margin-top: 6px;
-    }
+    body { font-family: sans-serif; margin: 0; padding: 80px 10px 10px; background: #f4f4f4; text-align: center; }
+    textarea, select, button { display: block; margin: 10px auto; width: 90%; max-width: 400px; padding: 10px; font-size: 16px; }
+    .poll-preview { background: white; border-radius: 12px; padding: 15px; margin: 10px auto; max-width: 400px; text-align: left; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    .poll-preview small { display: block; margin-top: 6px; font-size: 13px; color: #666; }
+    .result { margin-top: 8px; font-size: 14px; line-height: 1.5; }
+    #notif { position: fixed; top: 0; left: 0; right: 0; background: #333; color: white; text-align: center; padding: 10px; font-size: 14px; display: none; z-index: 9999; }
+    .option-btn { display: block; background: #eee; border: none; border-radius: 8px; padding: 10px; margin: 6px auto; max-width: 300px; font-size: 16px; cursor: pointer; }
+    .disabled { opacity: 0.6; pointer-events: none; }
   </style>
 </head>
 <body>
-  <h1>Anonypoll</h1>
-  <div id="notif" style="
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  background: #333;
-  color: white;
-  text-align: center;
-  padding: 10px;
-  font-size: 14px;
-  display: none;
-  z-index: 9999;
-"></div>
+<div id="notif"></div><h2>Create a Poll</h2>
+<textarea id="poll-question" placeholder="Enter your poll question..."></textarea>
+<textarea id="poll-options" placeholder="One option per line"></textarea>
+<select id="poll-duration">
+  <option value="30">30 minutes</option>
+  <option value="60">1 hour</option>
+  <option value="360">6 hours</option>
+  <option value="720">12 hours</option>
+  <option value="1440" selected>24 hours</option>
+  <option value="2880">48 hours</option>
+  <option value="10080">1 week</option>
+</select>
+<button id="create-btn">Create</button><h2>Active Polls</h2>
+<div id="polls"></div><script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-  <div class="create">
-    <h2>Create Poll</h2>
-    <input id="poll-question" placeholder="Your question..." />
-    <textarea id="poll-options" placeholder="Options (one per line)"></textarea>
-    <button id="create-btn">Create</button>
-  </div>
+const firebaseConfig = {
+  apiKey: "AIzaSyA0b-2cAqQzc_cAx3vIYikB3ni_nR40GPs",
+  authDomain: "anonypoll.firebaseapp.com",
+  projectId: "anonypoll",
+  storageBucket: "anonypoll.firebasestorage.app",
+  messagingSenderId: "346324014501",
+  appId: "1:346324014501:web:2a465083f14e4a4f97444c"
+};
 
-  <div id="polls"></div>
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
 
-  <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import {
-    getFirestore, collection, addDoc, getDocs
-  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+const notif = document.getElementById("notif");
+function showNotif(msg, time = 3000) {
+  notif.innerText = msg;
+  notif.style.display = "block";
+  setTimeout(() => notif.style.display = "none", time);
+}
 
-  const firebaseConfig = {
-    apiKey: "AIzaSyA0b-2cAqQzc_cAx3vIYikB3ni_nR40GPs",
-    authDomain: "anonypoll.firebaseapp.com",
-    databaseURL: "https://anonypoll-default-rtdb.europe-west1.firebasedatabase.app",
-    projectId: "anonypoll",
-    storageBucket: "anonypoll.firebasestorage.app",
-    messagingSenderId: "346324014501",
-    appId: "1:346324014501:web:2a465083f14e4a4f97444c"
-  };
+document.getElementById("create-btn").addEventListener("click", () => {
+  showNotif("Creating poll...");
+  createPoll();
+});
 
-  const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
+async function createPoll() {
+  const q = document.getElementById("poll-question").value.trim();
+  const rawOpts = document.getElementById("poll-options").value.trim();
+  const duration = parseInt(document.getElementById("poll-duration").value);
+  const opts = rawOpts.split("\n").map(o => o.trim()).filter(o => o);
+  if (!q || opts.length < 2) return showNotif("Fill question + at least 2 options");
 
-  const notif = document.getElementById("notif");
-  function showNotif(msg, time = 3000) {
-    notif.innerText = msg;
-    notif.style.display = "block";
-    setTimeout(() => notif.style.display = "none", time);
-  }
+  const expiresAt = Date.now() + duration * 60000;
 
-  document.getElementById("create-btn").addEventListener("click", () => {
-    showNotif("Create button clicked");
-    createPoll();
-  });
-
-  async function createPoll() {
-    const q = document.getElementById("poll-question").value.trim();
-    const rawOpts = document.getElementById("poll-options").value.trim();
-    if (!q || !rawOpts) return showNotif("Missing question or options");
-
-    const opts = rawOpts.split("\n").map(o => o.trim()).filter(o => o);
-    if (opts.length < 2) return showNotif("At least two options");
-
-    const newPoll = {
+  try {
+    const ref = await addDoc(collection(db, "polls"), {
       question: q,
       options: opts,
       votes: opts.map(() => 0),
-      created: Date.now()
-    };
-
-    try {
-      const docRef = await addDoc(collection(db, "polls"), newPoll);
-      showNotif("Poll created!", 1500);
-      setTimeout(() => {
-        location.href = `poll.html?poll=${docRef.id}`;
-      }, 800);
-    } catch (e) {
-      showNotif("Failed to create poll.");
-    }
+      created: Date.now(),
+      expiresAt
+    });
+    showNotif("Poll created! Redirecting...");
+    setTimeout(() => location.href = `poll.html?poll=${ref.id}`, 1000);
+  } catch (e) {
+    showNotif("Poll creation failed.");
   }
+}
 
-  const pollsEl = document.getElementById("polls");
-  const pollsSnap = await getDocs(collection(db, "polls"));
-  pollsSnap.forEach(doc => {
-    const d = doc.data();
-    const wrap = document.createElement("div");
-    wrap.className = "poll-preview";
-    wrap.innerHTML = `<b>${d.question}</b><div class="result">${formatVotes(d.votes, d.options)}</div>`;
-    wrap.onclick = () => location.href = `poll.html?poll=${doc.id}`;
-    pollsEl.appendChild(wrap);
-  });
+function formatVotes(votes, options) {
+  const total = votes.reduce((a, b) => a + b, 0);
+  if (total === 0) return options.map(o => `${o}: 0%`).join("<br>");
+  return votes.map((v, i) => `${options[i]}: ${Math.round((v / total) * 100)}%`).join("<br>");
+}
 
-  function formatVotes(votes, options) {
-    const total = votes.reduce((a, b) => a + b, 0);
-    if (total === 0) return options.map(o => `${o}: 0%`).join("<br>");
-    return votes.map((v, i) => `${options[i]}: ${Math.round((v / total) * 100)}%`).join("<br>");
-  }
-</script>
+function getCountdown(expiresAt) {
+  const left = expiresAt - Date.now();
+  if (left <= 0) return "⛔ Poll ended";
+  const m = Math.floor(left / 60000);
+  const h = Math.floor(m / 60);
+  const remM = m % 60;
+  return `🕒 Ends in ${h > 0 ? h + 'h ' : ''}${remM}m`;
+}
+
+const pollsEl = document.getElementById("polls");
+const pollsSnap = await getDocs(collection(db, "polls"));
+pollsSnap.forEach(doc => {
+  const d = doc.data();
+  const wrap = document.createElement("div");
+  wrap.className = "poll-preview";
+  wrap.innerHTML = `<b>${d.question}</b><div class="result">${formatVotes(d.votes, d.options)}</div><small>${getCountdown(d.expiresAt)}</small>`;
+  wrap.onclick = () => location.href = `poll.html?poll=${doc.id}`;
+  pollsEl.appendChild(wrap);
+});
+</script></body>
+</html>
