@@ -1,161 +1,121 @@
-<!DOCTYPE html>
-<html lang="en">
+<!DOCTYPE html><html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Poll</title>
   <style>
-    body {
-      font-family: sans-serif;
-      background: #121212;
-      color: white;
-      margin: 0;
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-
-    #notif {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      background: #333;
-      color: #fff;
-      text-align: center;
-      padding: 10px;
-      font-size: 14px;
-      display: none;
-      z-index: 1000;
-    }
-
-    .poll-box {
-      background: #1e1e1e;
-      border-radius: 12px;
-      padding: 16px;
-      width: 100%;
-      max-width: 400px;
-      margin-top: 40px;
-    }
-
-    .option {
-      padding: 10px;
-      margin-top: 8px;
-      background: #2a2a2a;
-      border-radius: 6px;
-      cursor: pointer;
-    }
-
-    .option:hover {
-      background: #3a3a3a;
-    }
-
-    .results {
-      margin-top: 10px;
-      font-size: 14px;
-      color: #ccc;
-    }
-
-    .back {
-      margin-top: 20px;
-      color: #00b7ff;
-      text-decoration: underline;
-      cursor: pointer;
-    }
+    body { font-family: sans-serif; margin: 0; padding: 70px 10px 10px; background: #f4f4f4; text-align: center; }
+    #notif { position: fixed; top: 0; left: 0; right: 0; background: #333; color: white; text-align: center; padding: 10px; font-size: 14px; display: none; z-index: 9999; }
+    .poll-box { background: white; border-radius: 12px; padding: 15px; margin: 10px auto; max-width: 400px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    .option-btn { display: block; background: #eee; border: none; border-radius: 8px; padding: 10px; margin: 6px auto; max-width: 300px; font-size: 16px; cursor: pointer; }
+    .selected { background: #cce5ff; font-weight: bold; }
+    .result { margin-top: 8px; font-size: 14px; line-height: 1.5; }
+    .bottom-note { margin-top: 10px; color: #666; font-size: 13px; }
+    button { font-size: 14px; margin-top: 8px; }
   </style>
 </head>
 <body>
-  <div id="notif"></div>
+<div id="notif"></div>
+<div class="poll-box" id="poll-box">Loading...</div><script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-  <div class="poll-box">
-    <h2 id="question">Loading...</h2>
-    <div id="options"></div>
-    <div class="results" id="results"></div>
-  </div>
+const firebaseConfig = {
+  apiKey: "AIzaSyA0b-2cAqQzc_cAx3vIYikB3ni_nR40GPs",
+  authDomain: "anonypoll.firebaseapp.com",
+  projectId: "anonypoll",
+  storageBucket: "anonypoll.firebasestorage.app",
+  messagingSenderId: "346324014501",
+  appId: "1:346324014501:web:2a465083f14e4a4f97444c"
+};
 
-  <div class="back" onclick="location.href='index.html'">← Back to polls</div>
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
 
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-    import { getFirestore, doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+const notif = document.getElementById("notif");
+function showNotif(msg, time = 3000) {
+  notif.innerText = msg;
+  notif.style.display = "block";
+  setTimeout(() => notif.style.display = "none", time);
+}
 
-    const firebaseConfig = {
-      apiKey: "AIzaSyA0b-2cAqQzc_cAx3vIYikB3ni_nR40GPs",
-      authDomain: "anonypoll.firebaseapp.com",
-      databaseURL: "https://anonypoll-default-rtdb.europe-west1.firebasedatabase.app",
-      projectId: "anonypoll",
-      storageBucket: "anonypoll.firebasestorage.app",
-      messagingSenderId: "346324014501",
-      appId: "1:346324014501:web:2a465083f14e4a4f97444c"
-    };
+const params = new URLSearchParams(location.search);
+const id = params.get("poll");
+if (!id) location.href = "index.html";
 
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
+const pollBox = document.getElementById("poll-box");
+const pollRef = doc(db, "polls", id);
+const snap = await getDoc(pollRef);
+if (!snap.exists()) location.href = "index.html";
 
-    const notif = document.getElementById("notif");
-    function showNotif(msg, time = 3000) {
-      notif.innerText = msg;
-      notif.style.display = "block";
-      setTimeout(() => {
-        notif.style.display = "none";
-      }, time);
-    }
+const data = snap.data();
+const now = Date.now();
+const expired = now > data.expiresAt;
 
-    const params = new URLSearchParams(location.search);
-    const pollId = params.get("poll");
+function getCountdown(exp) {
+  const left = exp - Date.now();
+  if (left <= 0) return "⛔ Poll ended";
+  const m = Math.floor(left / 60000);
+  const h = Math.floor(m / 60);
+  const remM = m % 60;
+  return `🕒 Ends in ${h > 0 ? h + 'h ' : ''}${remM}m`;
+}
 
-    if (!pollId) location.href = "index.html";
+function saveVote(index) {
+  localStorage.setItem("poll_vote_" + id, index);
+}
+function getVote() {
+  return localStorage.getItem("poll_vote_" + id);
+}
 
-    const qEl = document.getElementById("question");
-    const oEl = document.getElementById("options");
-    const rEl = document.getElementById("results");
+async function castVote(index) {
+  const prev = getVote();
+  if (prev !== null) {
+    data.votes[parseInt(prev)]--;
+  }
+  data.votes[index]++;
+  await updateDoc(pollRef, { votes: data.votes });
+  saveVote(index);
+  render();
+}
 
-    const votedKey = "poll_voted_" + pollId;
+function render() {
+  const userVote = getVote();
+  const ended = Date.now() > data.expiresAt;
 
-    async function loadPoll() {
-      try {
-        const pollRef = doc(db, "polls", pollId);
-        const pollSnap = await getDoc(pollRef);
+  let html = `<h3>${data.question}</h3>`;
 
-        if (!pollSnap.exists()) {
-          location.href = "index.html";
-          return;
-        }
+  if (ended) {
+    html += `<div class="result">${formatVotes(data.votes, data.options)}</div>`;
+    html += `<div class="bottom-note">⛔ Poll ended</div>`;
+  } else {
+    data.options.forEach((opt, i) => {
+      const selected = userVote == i ? "selected" : "";
+      html += `<button class="option-btn ${selected}" onclick="castVote(${i})">${opt}</button>`;
+    });
+    html += `<div class="result">${formatVotes(data.votes, data.options)}</div>`;
+    html += `<div class="bottom-note">${getCountdown(data.expiresAt)}</div>`;
+    html += `<button onclick="clearVote()">Remove Vote</button>`;
+    html += `<button onclick="endNow()">End Now (Test)</button>`;
+  }
 
-        const data = pollSnap.data();
-        qEl.innerText = data.question;
-        oEl.innerHTML = "";
-        rEl.innerHTML = getPercentages(data.votes, data.options);
+  pollBox.innerHTML = html;
+}
 
-        if (localStorage.getItem(votedKey)) return;
+function formatVotes(votes, options) {
+  const total = votes.reduce((a, b) => a + b, 0);
+  if (total === 0) return options.map(o => `${o}: 0%`).join("<br>");
+  return votes.map((v, i) => `${options[i]}: ${Math.round((v / total) * 100)}%`).join("<br>");
+}
 
-        data.options.forEach((opt, i) => {
-          const div = document.createElement("div");
-          div.className = "option";
-          div.innerText = opt;
-          div.onclick = async () => {
-            data.votes[i]++;
-            await updateDoc(pollRef, { votes: data.votes });
-            localStorage.setItem(votedKey, "1");
-            showNotif("Vote recorded!");
-            oEl.innerHTML = "";
-            rEl.innerHTML = getPercentages(data.votes, data.options);
-          };
-          oEl.appendChild(div);
-        });
-      } catch (e) {
-        location.href = "index.html";
-      }
-    }
+window.castVote = castVote;
+window.clearVote = () => { localStorage.removeItem("poll_vote_" + id); render(); };
+window.endNow = async () => {
+  await updateDoc(pollRef, { expiresAt: Date.now() });
+  data.expiresAt = Date.now();
+  render();
+};
 
-    function getPercentages(votes, options) {
-      const total = votes.reduce((a, b) => a + b, 0);
-      if (total === 0) return options.map(opt => `${opt}: 0%`).join("<br>");
-      return votes.map((v, i) => `${options[i]}: ${Math.round((v / total) * 100)}%`).join("<br>");
-    }
-
-    loadPoll();
-  </script>
-</body>
+render();
+</script></body>
 </html>
