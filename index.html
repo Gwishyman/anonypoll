@@ -99,22 +99,33 @@
     const db = getFirestore(app);
 
     async function createPoll() {
-      const question = document.getElementById("poll-question").value.trim();
-      const optionsText = document.getElementById("poll-options").value.trim();
-      if (!question || !optionsText) return;
+  const question = document.getElementById("poll-question").value.trim();
+  const optionsText = document.getElementById("poll-options").value.trim();
+  if (!question || !optionsText) {
+    alert("Enter a question and at least one option.");
+    return;
+  }
 
-      const options = optionsText.split('\n').map(opt => opt.trim()).filter(Boolean);
-      const counts = options.map(() => 0);
+  const options = optionsText.split('\n').map(opt => opt.trim()).filter(Boolean);
+  if (options.length < 2) {
+    alert("Please enter at least 2 options.");
+    return;
+  }
 
-      await addDoc(collection(db, "polls"), {
-        question,
-        options,
-        votes: counts,
-        created: Date.now()
-      });
+  const counts = options.map(() => 0);
 
-      location.reload();
-    }
+  try {
+    const docRef = await addDoc(collection(db, "polls"), {
+      question,
+      options,
+      votes: counts,
+      created: Date.now()
+    });
+    window.location.href = `poll.html?poll=${docRef.id}`;
+  } catch (e) {
+    alert("Poll creation failed. Probably a Firebase rules or config issue.");
+  }
+      }
 
     async function loadPolls() {
       const pollsContainer = document.getElementById("polls");
