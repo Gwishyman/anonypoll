@@ -3,51 +3,78 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Anonypoll</title>
+  <title>Poll</title>
   <style>
     body {
       font-family: sans-serif;
       background: #121212;
       color: white;
       margin: 0;
+      padding: 20px;
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 20px;
     }
-    .poll {
+
+    #notif {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      background: #333;
+      color: #fff;
+      text-align: center;
+      padding: 10px;
+      font-size: 14px;
+      display: none;
+      z-index: 1000;
+    }
+
+    .poll-box {
       background: #1e1e1e;
       border-radius: 12px;
       padding: 16px;
-      margin-top: 20px;
       width: 100%;
       max-width: 400px;
+      margin-top: 40px;
     }
-    button {
+
+    .option {
       padding: 10px;
-      margin-top: 10px;
-      background: #007bff;
-      color: white;
-      border: none;
+      margin-top: 8px;
+      background: #2a2a2a;
       border-radius: 6px;
       cursor: pointer;
-      width: 100%;
     }
-    .option {
-      margin: 8px 0;
+
+    .option:hover {
+      background: #3a3a3a;
     }
+
     .results {
+      margin-top: 10px;
       font-size: 14px;
       color: #ccc;
-      margin-top: 6px;
+    }
+
+    .back {
+      margin-top: 20px;
+      color: #00b7ff;
+      text-decoration: underline;
+      cursor: pointer;
     }
   </style>
 </head>
 <body>
-  <h1>Anonypoll</h1>
-  <div class="poll" id="pollContainer">Loading...</div>
-  <button onclick="window.location.href='index.html'">← Back to Home</button>
-  <button onclick="copyLink()">🔗 Copy Link</button>
+  <div id="notif"></div>
+
+  <div class="poll-box">
+    <h2 id="question">Loading...</h2>
+    <div id="options"></div>
+    <div class="results" id="results"></div>
+  </div>
+
+  <div class="back" onclick="location.href='index.html'">← Back to polls</div>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
@@ -66,52 +93,69 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    const container = document.getElementById("pollContainer");
-    const urlParams = new URLSearchParams(window.location.search);
-    const pollId = urlParams.get("poll");
-
-    if (!pollId) window.location.href = "index.html";
-    else loadPoll(pollId);
-
-    async function loadPoll(id) {
-      const pollRef = doc(db, "polls", id);
-      const pollSnap = await getDoc(pollRef);
-
-      if (!pollSnap.exists()) {
-        window.location.href = "index.html";
-        return;
-      }
-
-      const data = pollSnap.data();
-      document.title = `${data.question} - Anonypoll`;
-
-      const voted = localStorage.getItem("voted_" + id);
-      const html = [`<h3>${data.question}</h3>`];
-
-      data.options.forEach((opt, i) => {
-        if (voted) {
-          const totalVotes = data.votes.reduce((a,b) => a + b, 0) || 1;
-          const pct = Math.round((data.votes[i] / totalVotes) * 100);
-          html.push(`<div class="option">${opt} — <span class="results">${data.votes[i]} votes (${pct}%)</span></div>`);
-        } else {
-          html.push(`<button onclick="vote(${i})">${opt}</button>`);
-        }
-      });
-
-      container.innerHTML = html.join("");
-
-      window.vote = async (index) => {
-        data.votes[index]++;
-        await updateDoc(pollRef, { votes: data.votes });
-        localStorage.setItem("voted_" + id, "true");
-        loadPoll(id);
-      };
+    const notif = document.getElementById("notif");
+    function showNotif(msg, time = 3000) {
+      notif.innerText = msg;
+      notif.style.display = "block";
+      setTimeout(() => {
+        notif.style.display = "none";
+      }, time);
     }
 
-    window.copyLink = () => {
-      navigator.clipboard.writeText(location.href)
-        .then(() => alert("Link copied to clipboard!"));
-    };
+    const params = new URLSearchParams(location.search);
+    const pollId = params.get("poll");
+
+    if (!pollId) location.href = "index.html";
+
+    const qEl = document.getElementById("question");
+    const oEl = document.getElementById("options");
+    const rEl = document.getElementById("results");
+
+    const votedKey = "poll_voted_" + pollId;
+
+    async function loadPoll() {
+      try {
+        const pollRef = doc(db, "polls", pollId);
+        const pollSnap = await getDoc(pollRef);
+
+        if (!pollSnap.exists()) {
+          location.href = "index.html";
+          return;
+        }
+
+        const data = pollSnap.data();
+        qEl.innerText = data.question;
+        oEl.innerHTML = "";
+        rEl.innerHTML = getPercentages(data.votes, data.options);
+
+        if (localStorage.getItem(votedKey)) return;
+
+        data.options.forEach((opt, i) => {
+          const div = document.createElement("div");
+          div.className = "option";
+          div.innerText = opt;
+          div.onclick = async () => {
+            data.votes[i]++;
+            await updateDoc(pollRef, { votes: data.votes });
+            localStorage.setItem(votedKey, "1");
+            showNotif("Vote recorded!");
+            oEl.innerHTML = "";
+            rEl.innerHTML = getPercentages(data.votes, data.options);
+          };
+          oEl.appendChild(div);
+        });
+      } catch (e) {
+        location.href = "index.html";
+      }
+    }
+
+    function getPercentages(votes, options) {
+      const total = votes.reduce((a, b) => a + b, 0);
+      if (total === 0) return options.map(opt => `${opt}: 0%`).join("<br>");
+      return votes.map((v, i) => `${options[i]}: ${Math.round((v / total) * 100)}%`).join("<br>");
+    }
+
+    loadPoll();
   </script>
 </body>
 </html>
