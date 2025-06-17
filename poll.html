@@ -2,21 +2,29 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Poll</title>
+  <title>Anonypoll</title>
   <style>
-    body { font-family: sans-serif; margin: 0; padding: 70px 10px 10px; background: #f4f4f4; text-align: center; }
-    #notif { position: fixed; top: 0; left: 0; right: 0; background: #333; color: white; text-align: center; padding: 10px; font-size: 14px; display: none; z-index: 9999; }
-    .poll-box { background: white; border-radius: 12px; padding: 15px; margin: 10px auto; max-width: 400px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-    .option-btn { display: block; background: #eee; border: none; border-radius: 8px; padding: 10px; margin: 6px auto; max-width: 300px; font-size: 16px; cursor: pointer; }
-    .selected { background: #cce5ff; font-weight: bold; }
-    .result { margin-top: 8px; font-size: 14px; line-height: 1.5; }
-    .bottom-note { margin-top: 10px; color: #666; font-size: 13px; }
-    button { font-size: 14px; margin-top: 8px; }
+    body { background: #1e1e1e; color: white; font-family: sans-serif; margin: 0; padding: 20px; text-align: center; }
+    .container { max-width: 500px; margin: auto; background: #2c2c2c; padding: 20px; border-radius: 12px; }
+    .question { font-size: 20px; margin-bottom: 20px; }
+    .option { background: #444; margin: 10px 0; padding: 12px; border-radius: 8px; cursor: pointer; }
+    .option:hover { background: #555; }
+    .selected { background: #0066cc !important; }
+    #removeVoteBtn { background: #cc0000; color: white; border: none; padding: 10px; border-radius: 8px; cursor: pointer; margin-top: 15px; }
+    #notif { background: #444; color: white; padding: 10px; display: none; margin-bottom: 15px; border-radius: 6px; }
+    .countdown { margin-top: 10px; font-size: 14px; color: #ccc; }
+    .votes-count { margin-top: 8px; font-size: 14px; color: #aaa; }
   </style>
 </head>
 <body>
-<div id="notif"></div>
-<div class="poll-box" id="poll-box">Loading...</div><script type="module">
+<div class="container">
+  <div id="notif"></div>
+  <div class="question" id="question">Loading...</div>
+  <div id="options"></div>
+  <button id="removeVoteBtn" onclick="removeVote()" style="display:none;">Remove Vote</button>
+  <div class="votes-count" id="votesCount"></div>
+  <div class="countdown" id="countdown"></div>
+</div><script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getFirestore, doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
@@ -32,6 +40,11 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
+const params = new URLSearchParams(location.search);
+const pollId = params.get("poll");
+
+if (!pollId) location.href = "index.html";
+
 const notif = document.getElementById("notif");
 function showNotif(msg, time = 3000) {
   notif.innerText = msg;
@@ -39,83 +52,71 @@ function showNotif(msg, time = 3000) {
   setTimeout(() => notif.style.display = "none", time);
 }
 
-const params = new URLSearchParams(location.search);
-const id = params.get("poll");
-if (!id) location.href = "index.html";
+const questionEl = document.getElementById("question");
+const optionsEl = document.getElementById("options");
+const removeVoteBtn = document.getElementById("removeVoteBtn");
+const countdownEl = document.getElementById("countdown");
+const votesCountEl = document.getElementById("votesCount");
 
-const pollBox = document.getElementById("poll-box");
-const pollRef = doc(db, "polls", id);
-const snap = await getDoc(pollRef);
-if (!snap.exists()) location.href = "index.html";
+let pollData;
+let userVote = localStorage.getItem("vote-" + pollId);
 
-const data = snap.data();
-const now = Date.now();
-const expired = now > data.expiresAt;
-
-function getCountdown(exp) {
-  const left = exp - Date.now();
-  if (left <= 0) return "⛔ Poll ended";
-  const m = Math.floor(left / 60000);
-  const h = Math.floor(m / 60);
-  const remM = m % 60;
-  return `🕒 Ends in ${h > 0 ? h + 'h ' : ''}${remM}m`;
+function formatCountdown(ms) {
+  if (ms <= 0) return "⛔ Poll Ended";
+  const min = Math.floor(ms / 60000);
+  const hr = Math.floor(min / 60);
+  const remMin = min % 60;
+  return `🕒 Ends in ${hr > 0 ? hr + 'h ' : ''}${remMin}m`;
 }
 
-function saveVote(index) {
-  localStorage.setItem("poll_vote_" + id, index);
-}
-function getVote() {
-  return localStorage.getItem("poll_vote_" + id);
-}
+async function loadPoll() {
+  const docRef = doc(db, "polls", pollId);
+  const snap = await getDoc(docRef);
+  if (!snap.exists()) return location.href = "index.html";
+  pollData = snap.data();
 
-async function castVote(index) {
-  const prev = getVote();
-  if (prev !== null) {
-    data.votes[parseInt(prev)]--;
-  }
-  data.votes[index]++;
-  await updateDoc(pollRef, { votes: data.votes });
-  saveVote(index);
-  render();
-}
+  const now = Date.now();
+  const expired = now > pollData.expiresAt;
+  questionEl.textContent = pollData.question;
+  const totalVotes = pollData.votes.reduce((a, b) => a + b, 0);
+  votesCountEl.textContent = `${totalVotes} vote${totalVotes === 1 ? '' : 's'}`;
 
-function render() {
-  const userVote = getVote();
-  const ended = Date.now() > data.expiresAt;
+  countdownEl.textContent = expired ? "⛔ Poll Ended" : formatCountdown(pollData.expiresAt - now);
 
-  let html = `<h3>${data.question}</h3>`;
+  optionsEl.innerHTML = "";
+  pollData.options.forEach((opt, i) => {
+    const optDiv = document.createElement("div");
+    optDiv.className = "option";
+    optDiv.textContent = opt + (totalVotes > 0 ? ` (${Math.round(pollData.votes[i] / totalVotes * 100)}%)` : "");
+    if (!expired && !userVote) optDiv.onclick = () => vote(i);
+    if (userVote == i) optDiv.classList.add("selected");
+    optionsEl.appendChild(optDiv);
+  });
 
-  if (ended) {
-    html += `<div class="result">${formatVotes(data.votes, data.options)}</div>`;
-    html += `<div class="bottom-note">⛔ Poll ended</div>`;
-  } else {
-    data.options.forEach((opt, i) => {
-      const selected = userVote == i ? "selected" : "";
-      html += `<button class="option-btn ${selected}" onclick="castVote(${i})">${opt}</button>`;
-    });
-    html += `<div class="result">${formatVotes(data.votes, data.options)}</div>`;
-    html += `<div class="bottom-note">${getCountdown(data.expiresAt)}</div>`;
-    html += `<button onclick="clearVote()">Remove Vote</button>`;
-    html += `<button onclick="endNow()">End Now (Test)</button>`;
-  }
-
-  pollBox.innerHTML = html;
+  removeVoteBtn.style.display = (!expired && userVote !== null) ? "block" : "none";
 }
 
-function formatVotes(votes, options) {
-  const total = votes.reduce((a, b) => a + b, 0);
-  if (total === 0) return options.map(o => `${o}: 0%`).join("<br>");
-  return votes.map((v, i) => `${options[i]}: ${Math.round((v / total) * 100)}%`).join("<br>");
+async function vote(index) {
+  if (userVote !== null) return showNotif("You already voted. Remove vote to change.");
+  const docRef = doc(db, "polls", pollId);
+  pollData.votes[index]++;
+  await updateDoc(docRef, { votes: pollData.votes });
+  localStorage.setItem("vote-" + pollId, index);
+  userVote = index;
+  loadPoll();
 }
 
-window.castVote = castVote;
-window.clearVote = () => { localStorage.removeItem("poll_vote_" + id); render(); };
-window.endNow = async () => {
-  await updateDoc(pollRef, { expiresAt: Date.now() });
-  data.expiresAt = Date.now();
-  render();
-};
+async function removeVote() {
+  if (userVote === null) return;
+  const docRef = doc(db, "polls", pollId);
+  pollData.votes[userVote]--;
+  if (pollData.votes[userVote] < 0) pollData.votes[userVote] = 0;
+  await updateDoc(docRef, { votes: pollData.votes });
+  localStorage.removeItem("vote-" + pollId);
+  userVote = null;
+  loadPoll();
+}
 
-render();
+loadPoll();
 </script></body>
 </html>
